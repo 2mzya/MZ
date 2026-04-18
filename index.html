@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MZ</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    color: white;
+}
+
+h1 {
+    text-align: center;
+    color: #38bdf8;
+}
+
+.topbar {
+    max-width: 900px;
+    margin: auto;
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+}
+
+input, select {
+    padding: 8px;
+    border-radius: 6px;
+    border: none;
+}
+
+.container {
+    max-width: 900px;
+    margin: auto;
+    padding: 10px;
+}
+
+.file {
+    background: #1e293b;
+    margin: 8px 0;
+    padding: 12px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: 0.2s;
+    cursor: pointer;
+}
+
+.file:hover {
+    background: #334155;
+    transform: scale(1.02);
+}
+
+.download {
+    background: #22c55e;
+    padding: 6px 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: white;
+    font-size: 12px;
+}
+
+.preview {
+    margin-top: 20px;
+    text-align: center;
+}
+</style>
+</head>
+
+<body>
+
+<h1>MZ</h1>
+
+<div class="topbar">
+    <input type="text" id="search" placeholder="Search files..." oninput="render()">
+    
+    <select id="sort" onchange="render()">
+        <option value="name">Sort by Name</option>
+        <option value="type">Sort by Type</option>
+    </select>
+</div>
+
+<div class="container" id="files"></div>
+
+<div class="preview" id="preview"></div>
+
+<script>
+let currentData = [];
+let currentPath = "";
+
+function formatSize(bytes) {
+    if (!bytes) return "";
+    const sizes = ["B", "KB", "MB", "GB"];
+    let i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + " " + sizes[i];
+}
+
+async function loadFiles(path = "") {
+    const repo = window.location.pathname.split("/")[1];
+    const user = window.location.hostname.split(".")[0];
+
+    const api = `https://api.github.com/repos/${user}/${repo}/contents/${path}`;
+
+    const res = await fetch(api);
+    currentData = await res.json();
+    currentPath = path;
+
+    render();
+}
+
+function render() {
+    const container = document.getElementById("files");
+    const search = document.getElementById("search").value.toLowerCase();
+    const sort = document.getElementById("sort").value;
+
+    let data = currentData.filter(item =>
+        item.name.toLowerCase().includes(search) &&
+        item.name.toLowerCase() !== "index.html"
+    );
+
+    // sorting
+    data.sort((a, b) => {
+        if (sort === "type") return a.type.localeCompare(b.type);
+        return a.name.localeCompare(b.name);
+    });
+
+    container.innerHTML = "";
+
+    // back button
+    if (currentPath) {
+        const back = document.createElement("div");
+        back.className = "file";
+        back.innerHTML = "⬅️ Back";
+        back.onclick = () => {
+            const newPath = currentPath.split("/").slice(0, -1).join("/");
+            loadFiles(newPath);
+        };
+        container.appendChild(back);
+    }
+
+    data.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "file";
+
+        // 📁 Folder
+        if (item.type === "dir") {
+            div.innerHTML = `<span>📁 ${item.name}</span>`;
+            div.onclick = () => loadFiles(item.path);
+        }
+
+        // 📄 File
+        else {
+            div.innerHTML = `
+                <span>📄 ${item.name} (${formatSize(item.size)})</span>
+                <a class="download" href="${item.download_url}" download>Download</a>
+            `;
+
+            div.onclick = () => previewFile(item);
+        }
+
+        container.appendChild(div);
+    });
+}
+
+function previewFile(file) {
+    const preview = document.getElementById("preview");
+    const url = file.download_url;
+
+    // 🖼️ Images
+    if (file.name.match(/\.(jpg|png|gif|jpeg)$/i)) {
+        preview.innerHTML = `<img src="${url}" style="max-width:80%; border-radius:10px;">`;
+    }
+
+    // 🎵 Audio
+    else if (file.name.match(/\.(mp3|wav|ogg)$/i)) {
+        preview.innerHTML = `
+            <audio controls>
+                <source src="${url}">
+            </audio>
+        `;
+    }
+
+    // 📄 Other
+    else {
+        preview.innerHTML = `<p>No preview available</p>`;
+    }
+}
+
+loadFiles();
+</script>
+
+</body>
+</html>
